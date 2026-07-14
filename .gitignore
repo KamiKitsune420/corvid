@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# Tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local runtime data (never commit a real install)
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+/logs/
+config.json
+/_devdata/

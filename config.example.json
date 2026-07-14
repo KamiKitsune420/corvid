@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "theme": "system",
+  "logging": {
+    "level": "INFO",
+    "json_file": true,
+    "max_bytes": 5000000,
+    "backup_count": 5
+  },
+  "sync": {
+    "interval_seconds": 300,
+    "max_concurrent_jobs": 4,
+    "header_batch_size": 200
+  },
+  "security": {
+    "enforce_tls": true,
+    "block_remote_content": true,
+    "sanitize_html": true
+  },
+  "oauth": {
+    "google_client_id": "",
+    "google_client_secret": "",
+    "microsoft_client_id": ""
+  }
+}
