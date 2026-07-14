@@ -122,6 +122,10 @@ class Message:
     uid: int | None
     message_id: str
     subject: str = ""
+    # Threading headers (for grouping replies into conversations). ``references``
+    # is the space-separated References list; both hold raw Message-IDs.
+    in_reply_to: str = ""
+    references: str = ""
     from_name: str = ""
     from_addr: str = ""
     to_addrs: str = ""

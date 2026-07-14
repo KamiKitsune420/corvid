@@ -15,6 +15,7 @@ from ..app.bootstrap import AppContext
 from ..app.jobs import JobContext
 from ..domain.compose import DraftMessage
 from ..domain.entities import Account, AccountKind, FolderType, Message, ReceiveProtocol
+from ..errors import CorvidError
 from ..infra.autodiscovery import discover
 from ..infra.db import connect
 from ..infra.mail.parsing import ParsedMessage
@@ -62,7 +63,7 @@ from .preview_panel import PreviewPanel
 from .rules_dialog import RulesDialog
 from .settings_dialog import SettingsDialog
 from .update_dialog import UpdateDialog
-from .viewmodels import MessageRow
+from .viewmodels import ConversationGroup, MessageRow
 
 log = logging.getLogger("corvid.ui")
 
@@ -83,6 +84,7 @@ ID_NEWSGROUPS = wx.NewIdRef()
 ID_VIEW_MAIL = wx.NewIdRef()
 ID_VIEW_CALENDAR = wx.NewIdRef()
 ID_TOGGLE_VIEW = wx.NewIdRef()
+ID_GROUP_CONVERSATION = wx.NewIdRef()
 ID_CHECK_UPDATES = wx.NewIdRef()
 
 _EMPTY_BODY = ParsedMessage(text="(No content.)")
@@ -187,6 +189,11 @@ class MainFrame(wx.Frame):
         view_menu.Append(ID_VIEW_MAIL, "&Mail\tCtrl+1")
         view_menu.Append(ID_VIEW_CALENDAR, "&Calendar\tCtrl+2")
         view_menu.AppendSeparator()
+        group_item = view_menu.AppendCheckItem(
+            ID_GROUP_CONVERSATION, "&Group by Conversation"
+        )
+        group_item.Check(self.ctx.config.ui.group_by_conversation)
+        view_menu.AppendSeparator()
         view_menu.Append(ID_TOGGLE_VIEW, "S&witch Mail/Calendar\tCtrl+Tab")
         menubar.Append(view_menu, "&View")
 
@@ -206,6 +213,7 @@ class MainFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, lambda _e: self._show_view(0), id=ID_VIEW_MAIL)
         self.Bind(wx.EVT_MENU, lambda _e: self._show_view(1), id=ID_VIEW_CALENDAR)
         self.Bind(wx.EVT_MENU, self.on_toggle_view, id=ID_TOGGLE_VIEW)
+        self.Bind(wx.EVT_MENU, self.on_toggle_grouping, id=ID_GROUP_CONVERSATION)
         # Ctrl+Tab isn't reliable as a menu accelerator, so back it with a table.
         self.SetAcceleratorTable(
             wx.AcceleratorTable([(wx.ACCEL_CTRL, wx.WXK_TAB, ID_TOGGLE_VIEW)])
@@ -280,18 +288,22 @@ class MainFrame(wx.Frame):
         right = wx.SplitterWindow(outer, style=wx.SP_LIVE_UPDATE)
         self._right = right
         self._preview_sash = 360
-        # A single column holds one composed line per message ("Unread, sender,
-        # subject. sent today at 6:48AM.") so a screen reader speaks exactly that,
-        # rather than reading three column cells with header names interleaved.
-        self._list = wx.ListCtrl(right, style=wx.LC_REPORT)  # multi-select for Ctrl+A
+        self._last_item: wx.TreeItemId | None = None  # last opened row, for Esc focus
+        # A native tree: each row is one composed line ("Unread, sender, subject.
+        # sent today at 6:48AM.") so a screen reader speaks exactly that. Replies
+        # nest under a collapsible conversation node — NVDA announces the level and
+        # expanded/collapsed state, and Left/Right collapse/expand it natively.
+        self._list = wx.TreeCtrl(
+            right,
+            style=wx.TR_HIDE_ROOT | wx.TR_HAS_BUTTONS | wx.TR_LINES_AT_ROOT
+            | wx.TR_FULL_ROW_HIGHLIGHT | wx.TR_MULTIPLE,
+        )
         accessible_name(self._list, "Messages")
-        self._list.InsertColumn(0, "Message", width=700)
         # Arrowing/selecting only navigates (screen reader reads the row); the
         # message opens — and the reading pane appears — on Enter or double-click.
-        self._list.Bind(wx.EVT_LIST_ITEM_SELECTED, self.on_message_selected)
-        self._list.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_message_opened)
+        self._list.Bind(wx.EVT_TREE_SEL_CHANGED, self.on_message_selected)
+        self._list.Bind(wx.EVT_TREE_ITEM_ACTIVATED, self.on_message_opened)
         self._list.Bind(wx.EVT_KEY_DOWN, self._on_list_key)  # Ctrl+A, Ctrl+F
-        self._list.Bind(wx.EVT_SIZE, self._on_list_size)  # keep the column full-width
         self._list_pane = self._titled(right, "Messages", self._list)
 
         self._preview = PreviewPanel(right)
@@ -362,37 +374,102 @@ class MainFrame(wx.Frame):
             return int(data[1])
         return None
 
-    def _populate_list(self, rows: list[MessageRow]) -> None:
-        self._list.DeleteAllItems()
-        for index, row in enumerate(rows):
-            list_index = self._list.InsertItem(index, row.speech)
-            self._list.SetItemData(list_index, row.message_id)
-            if row.unread:
-                font = self._list.GetItemFont(list_index)
-                font.MakeBold()
-                self._list.SetItemFont(list_index, font)
+    # -- message tree helpers ----------------------------------------------
+    def _iter_items(self, parent: wx.TreeItemId | None = None):
+        """Depth-first walk of every item under the (hidden) root."""
+        if parent is None:
+            parent = self._list.GetRootItem()
+        child, cookie = self._list.GetFirstChild(parent)
+        while child.IsOk():
+            yield child
+            yield from self._iter_items(child)
+            child, cookie = self._list.GetNextChild(parent, cookie)
 
-    def _on_list_size(self, event: wx.SizeEvent) -> None:
-        # Stretch the single column to the list's width (minus the scrollbar).
-        width = self._list.GetClientSize().width
-        if width > 0:
-            self._list.SetColumnWidth(0, width)
-        event.Skip()
+    def _item_data(self, item: wx.TreeItemId | None) -> tuple | None:
+        if item is None or not item.IsOk():
+            return None
+        data = self._list.GetItemData(item)
+        return data if isinstance(data, tuple) else None
+
+    def _item_message_id(self, item: wx.TreeItemId | None) -> int | None:
+        """The message a row represents: a leaf's own, or a group's newest."""
+        data = self._item_data(item)
+        if data is None:
+            return None
+        if data[0] == "msg":
+            return int(data[1])
+        if data[0] == "grp":
+            return int(data[2])
+        return None
+
+    def _find_message_item(self, message_id: int) -> wx.TreeItemId | None:
+        for item in self._iter_items():
+            data = self._item_data(item)
+            if data and data[0] == "msg" and int(data[1]) == message_id:
+                return item
+        return None
+
+    def _first_message_item(self) -> wx.TreeItemId | None:
+        for item in self._iter_items():
+            data = self._item_data(item)
+            if data and data[0] == "msg":
+                return item
+        return None
+
+    def _add_message_row(self, parent: wx.TreeItemId, row: MessageRow) -> wx.TreeItemId:
+        item = self._list.AppendItem(parent, row.speech)
+        self._list.SetItemData(item, ("msg", row.message_id))
+        if row.unread:
+            self._list.SetItemBold(item, True)
+        return item
+
+    def _populate_groups(self, groups: list[ConversationGroup]) -> None:
+        """Fill the tree: conversations as collapsed parents, singletons as rows."""
+        self._list.DeleteAllItems()
+        root = self._list.AddRoot("root")
+        for group in groups:
+            if group.is_conversation:
+                parent = self._list.AppendItem(root, group.speech)
+                self._list.SetItemData(
+                    parent,
+                    ("grp", tuple(r.message_id for r in group.messages),
+                     group.newest_message_id),
+                )
+                if group.unread:
+                    self._list.SetItemBold(parent, True)
+                for row in group.messages:
+                    self._add_message_row(parent, row)
+                # Start collapsed so the folder reads as one line per conversation.
+            else:
+                self._add_message_row(root, group.messages[0])
+
+    def _populate_flat(self, rows: list[MessageRow]) -> None:
+        """Fill the tree with ungrouped rows (search results, grouping off)."""
+        self._list.DeleteAllItems()
+        root = self._list.AddRoot("root")
+        for row in rows:
+            self._add_message_row(root, row)
 
     def load_messages(self, folder_id: int) -> None:
         self._current_folder_id = folder_id  # the folder Find should search
-        rows = self._list_presenter.rows(folder_id)
-        self._populate_list(rows)
-        self.SetStatusText(f"{len(rows)} message(s)")
+        group = self.ctx.config.ui.group_by_conversation
+        groups = self._list_presenter.conversations(folder_id, group=group)
+        self._populate_groups(groups)
+        total = sum(len(g.messages) for g in groups)
+        threads = sum(1 for g in groups if g.is_conversation)
+        if threads:
+            self.SetStatusText(f"{total} message(s) in {len(groups)} conversation(s)")
+        else:
+            self.SetStatusText(f"{total} message(s)")
 
     def _on_list_key(self, event: wx.KeyEvent) -> None:
         if event.ControlDown() and event.GetKeyCode() == ord("A"):
-            for i in range(self._list.GetItemCount()):
-                self._list.Select(i, True)  # Ctrl+A: select every message
+            for item in self._iter_items():  # Ctrl+A: select every row
+                self._list.SelectItem(item, True)
         elif event.ControlDown() and event.GetKeyCode() == ord("F"):
             self.on_find()  # Ctrl+F: open the Find dialog
         else:
-            event.Skip()
+            event.Skip()  # let the tree handle arrows, Left/Right expand/collapse
 
     def on_find(self) -> None:
         """Open the Find dialog scoped to the current folder; reveal the pick."""
@@ -433,13 +510,10 @@ class MainFrame(wx.Frame):
             return
         if not self._select_folder_in_tree(message.folder_id):
             self.load_messages(message.folder_id)
-        for i in range(self._list.GetItemCount()):
-            if int(self._list.GetItemData(i)) == message_id:
-                self._list.Select(i, True)
-                self._list.Focus(i)
-                self._list.EnsureVisible(i)
-                self._list.SetFocus()
-                return
+        item = self._find_message_item(message_id)
+        if item is not None:
+            self._focus_item(item)  # expands its conversation if collapsed
+            return
         # Not in the visible page (older mail) — open it directly so it's not lost.
         self._open_message(message)
 
@@ -452,7 +526,7 @@ class MainFrame(wx.Frame):
         folder_id = self._selected_folder_id()
         results = SearchService(self.ctx.db).search(query, folder_id=folder_id)
         rows = [r for r in (message_to_row(m) for m in results) if r is not None]
-        self._populate_list(rows)
+        self._populate_flat(rows)  # results aren't threaded — show them flat
         self._hide_preview()
         where = "this folder" if folder_id is not None else "all mail"
         self.SetStatusText(f"{len(rows)} result(s) for '{query}' in {where}")
@@ -463,7 +537,7 @@ class MainFrame(wx.Frame):
         if folder_id is not None:
             self.load_messages(folder_id)
         else:
-            self._populate_list([])
+            self._populate_flat([])
 
     # -- events -------------------------------------------------------------
     def on_folder_selected(self, _event: wx.TreeEvent) -> None:
@@ -527,19 +601,23 @@ class MainFrame(wx.Frame):
         if not self._reading:
             return
         self._show_list_only()  # hides the preview, so it releases keyboard focus
-        row = self._list.GetFirstSelected()
-        if row == -1 and self._list.GetItemCount() > 0:
-            row = 0
-            self._list.Select(0, True)
-        self._focus_list_row(row)
+        item = self._last_item if self._item_data(self._last_item) else None
+        if item is None:
+            item = self._first_message_item()
+        self._focus_item(item)
         # Re-assert once the Unsplit/focus churn settles; Edge can grab focus back.
-        wx.CallAfter(self._focus_list_row, row)
+        wx.CallAfter(self._focus_item, item)
 
-    def _focus_list_row(self, row: int) -> None:
+    def _focus_item(self, item: wx.TreeItemId | None) -> None:
         self._list.SetFocus()
-        if row != -1:
-            self._list.Focus(row)  # the focused item NVDA announces
-            self._list.EnsureVisible(row)
+        if item is None or not item.IsOk():
+            return
+        parent = self._list.GetItemParent(item)  # expand its conversation, if any
+        if parent.IsOk() and parent != self._list.GetRootItem():
+            self._list.Expand(parent)
+        self._list.UnselectAll()
+        self._list.SelectItem(item)  # the focused item NVDA announces
+        self._list.EnsureVisible(item)
 
     def _on_char_hook(self, event: wx.KeyEvent) -> None:
         if event.GetKeyCode() == wx.WXK_ESCAPE and self._reading:
@@ -560,14 +638,26 @@ class MainFrame(wx.Frame):
         if not self._right.IsSplit():
             self._right.SplitHorizontally(self._list_pane, self._preview, self._preview_sash)
 
-    def on_message_selected(self, _event: wx.ListEvent) -> None:
-        # Just navigation — the screen reader reads the list row; the reading
-        # pane stays closed until the message is opened with Enter/double-click.
+    def on_message_selected(self, _event: wx.TreeEvent) -> None:
+        # Just navigation — the screen reader reads the row; the reading pane
+        # stays closed until the message is opened with Enter/double-click.
         self._hide_preview()
 
-    def on_message_opened(self, event: wx.ListEvent) -> None:
-        message = MessageRepository(self.ctx.db).get(int(self._list.GetItemData(event.GetIndex())))
+    def on_message_opened(self, event: wx.TreeEvent) -> None:
+        item = event.GetItem()
+        data = self._item_data(item)
+        if data is None:
+            return
+        if data[0] == "grp":
+            # A conversation node: toggle it so Enter expands/collapses the thread.
+            if self._list.IsExpanded(item):
+                self._list.Collapse(item)
+            else:
+                self._list.Expand(item)
+            return
+        message = MessageRepository(self.ctx.db).get(int(data[1]))
         if message is not None:
+            self._last_item = item
             self._open_message(message)
 
     def _open_message(self, message: Message) -> None:
@@ -628,34 +718,35 @@ class MainFrame(wx.Frame):
             body = future.result()
         except Exception as exc:  # noqa: BLE001 - show the failure in the pane
             body = ParsedMessage(text=f"[Could not download message: {exc}]")
-        # Reflect the now-read state in the folder counts and list row.
+        # Reflect the now-read state in the folder counts and the row's weight.
         self.reload_tree()
-        selected = self._list.GetFirstSelected()
-        if selected == -1 or int(self._list.GetItemData(selected)) != message_id:
-            return
-        self._unbold_row(selected)
+        item = self._find_message_item(message_id)
+        if item is not None:
+            self._list.SetItemBold(item, False)
         if not self._reading:
             # The user pressed Esc while it was loading; don't pull them back.
             return
         self._preview.show(header, body)
         self._preview.focus_body()
 
-    def _unbold_row(self, row: int) -> None:
-        font = self._list.GetItemFont(row)
-        font.SetWeight(wx.FONTWEIGHT_NORMAL)
-        self._list.SetItemFont(row, font)
-
     # -- message actions (server write-back) --------------------------------
     def _selected_message_id(self) -> int | None:
-        row = self._list.GetFirstSelected()
-        return int(self._list.GetItemData(row)) if row != -1 else None
+        """The message the cursor is on (a group node yields its newest message)."""
+        return self._item_message_id(self._list.GetFocusedItem())
 
     def _selected_message_ids(self) -> list[int]:
+        """Every selected message; a selected conversation contributes all of its."""
         ids: list[int] = []
-        row = self._list.GetFirstSelected()
-        while row != -1:
-            ids.append(int(self._list.GetItemData(row)))
-            row = self._list.GetNextSelected(row)
+        seen: set[int] = set()
+        for item in self._list.GetSelections():
+            data = self._item_data(item)
+            if data is None:
+                continue
+            members = (int(data[1]),) if data[0] == "msg" else tuple(int(x) for x in data[1])
+            for mid in members:
+                if mid not in seen:
+                    seen.add(mid)
+                    ids.append(mid)
         return ids
 
     def _bulk_delete(self, ids: list[int]) -> None:
@@ -1090,11 +1181,11 @@ class MainFrame(wx.Frame):
         account = self._current_account()
         if account is None:
             return
-        item = self._list.GetFirstSelected()
-        if item == -1:
+        message_id = self._item_message_id(self._list.GetFocusedItem())
+        if message_id is None:
             self.SetStatusText("Select a message to reply to.")
             return
-        message = MessageRepository(self.ctx.db).get(int(self._list.GetItemData(item)))
+        message = MessageRepository(self.ctx.db).get(message_id)
         if message is None:
             return
         if account.kind is AccountKind.NEWS:
@@ -1424,6 +1515,17 @@ class MainFrame(wx.Frame):
 
     def on_toggle_view(self, _event: wx.CommandEvent) -> None:
         self._show_view(1 - self._book.GetSelection())
+
+    def on_toggle_grouping(self, event: wx.CommandEvent) -> None:
+        """View > Group by Conversation: persist the choice and re-render."""
+        self.ctx.config.ui.group_by_conversation = event.IsChecked()
+        try:
+            self.ctx.config.save(self.ctx.paths.config_file)
+        except CorvidError as exc:  # non-fatal: the toggle still applies this session
+            log.warning("could not save grouping preference: %s", exc)
+        folder_id = self._selected_folder_id()
+        if folder_id is not None:
+            self.load_messages(folder_id)
 
     # -- background operation: tray, auto-sync, notifications ---------------
     def _apply_tray_setting(self) -> None:

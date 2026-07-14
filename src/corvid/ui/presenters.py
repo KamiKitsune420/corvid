@@ -8,8 +8,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from ..domain.entities import FolderType, Message
+from ..domain.threads import Thread, build_threads
 from ..infra.repositories import AccountRepository, FolderRepository, MessageRepository
-from .viewmodels import AccountNode, FolderNode, MessageRow
+from .viewmodels import AccountNode, ConversationGroup, FolderNode, MessageRow
 
 # Display order for known folder roles; custom folders sort alphabetically after.
 _FOLDER_ORDER: dict[FolderType, int] = {
@@ -71,6 +72,15 @@ def row_speech(message: Message, now: datetime) -> str:
     return f"{head}. sent {when}." if when else f"{head}."
 
 
+def group_speech(subject: str, count: int, unread_count: int) -> str:
+    """Compose the single line a screen reader announces for a conversation node."""
+    head = subject or "(no subject)"
+    tail = f"conversation, {count} messages"
+    if unread_count:
+        return f"{unread_count} unread. {head}. {tail}."
+    return f"{head}. {tail}."
+
+
 def message_to_row(message: Message, now: datetime | None = None) -> MessageRow | None:
     if message.id is None:
         return None
@@ -129,6 +139,39 @@ class MessageListPresenter:
             if row is not None:
                 result.append(row)
         return result
+
+    def conversations(
+        self, folder_id: int, *, group: bool = True, limit: int = 500, offset: int = 0
+    ) -> list[ConversationGroup]:
+        """Group a folder's messages into conversations for the message tree.
+
+        With ``group`` false each message becomes its own single-item group, so
+        the view falls back to a flat list in the folder's newest-first order.
+        """
+        now = datetime.now(UTC)
+        messages = self._messages.list_for_folder(folder_id, limit=limit, offset=offset)
+        threads = (
+            build_threads(messages)
+            if group
+            else [Thread((m,)) for m in messages]
+        )
+        return [g for g in (self._to_group(t, now) for t in threads) if g is not None]
+
+    @staticmethod
+    def _to_group(thread: Thread, now: datetime) -> ConversationGroup | None:
+        rows = [r for r in (message_to_row(m, now) for m in thread.messages) if r]
+        if not rows:
+            return None
+        unread_count = sum(1 for r in rows if r.unread)
+        subject = rows[0].subject  # the original (oldest) message's subject
+        return ConversationGroup(
+            key=str(thread.messages[0].id),
+            subject=subject,
+            messages=rows,
+            unread=unread_count > 0,
+            unread_count=unread_count,
+            speech=group_speech(subject, len(rows), unread_count),
+        )
 
 
 class MessagePreviewPresenter:

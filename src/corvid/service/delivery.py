@@ -37,6 +37,8 @@ def deliver_raw(
             uid=None,
             message_id=headers.message_id,
             subject=headers.subject,
+            in_reply_to=headers.in_reply_to,
+            references=headers.references,
             from_name=headers.from_name,
             from_addr=headers.from_addr,
             to_addrs=headers.to_addrs,

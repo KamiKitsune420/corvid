@@ -20,7 +20,9 @@ _SIZE_RE = re.compile(rb"RFC822\.SIZE\s+(\d+)")
 _FLAGS_RE = re.compile(rb"FLAGS\s+\(([^)]*)\)")
 
 _SPECIAL_USE_FLAGS = {"\\sent", "\\drafts", "\\trash", "\\junk", "\\archive", "\\all", "\\flagged"}
-_HEADER_FIELDS = "DATE FROM TO CC SUBJECT MESSAGE-ID CONTENT-TYPE"
+_HEADER_FIELDS = (
+    "DATE FROM TO CC SUBJECT MESSAGE-ID CONTENT-TYPE IN-REPLY-TO REFERENCES"
+)
 
 
 def _decode(value: str | None) -> str:
@@ -96,6 +98,8 @@ def parse_envelope(meta: bytes, header_bytes: bytes) -> HeaderEnvelope:
         uid=uid,
         message_id=(msg.get("Message-ID") or "").strip(),
         subject=_decode(msg.get("Subject")),
+        in_reply_to=(msg.get("In-Reply-To") or "").strip(),
+        references=" ".join(str(msg.get("References") or "").split()),
         from_name=_decode(from_name),
         from_addr=from_addr,
         to_addrs=to_addrs,

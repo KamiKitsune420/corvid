@@ -34,6 +34,8 @@ class HeaderEnvelope:
     uid: int
     message_id: str = ""
     subject: str = ""
+    in_reply_to: str = ""
+    references: str = ""
     from_name: str = ""
     from_addr: str = ""
     to_addrs: str = ""

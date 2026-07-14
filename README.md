@@ -140,6 +140,12 @@ model:
 - **Never color-alone** — unread mail is shown in **bold**, not just color.
 - **Native theming** — colors/fonts come from the OS, so high-contrast and
   font-scaling settings are respected.
+- **Conversation grouping** — the message list is a native tree; replies nest
+  under a collapsible conversation node that NVDA announces with its level and
+  expanded/collapsed state. **Left/Right collapse/expand** a conversation; Enter
+  on it toggles too. Grouping uses the real `In-Reply-To`/`References` headers and
+  can be turned off under **View → Group by Conversation** (older mail groups once
+  re-synced, since Corvid now stores those headers).
 
 ## Packaging (Windows)
 
@@ -192,7 +198,7 @@ downloaded or installed without your explicit action.
 ## Test
 
 ```bash
-pytest                # 178 tests, pure stdlib
+pytest                # 188 tests, pure stdlib
 mypy src              # strict type checking (the wx UI layer is excluded — see pyproject)
 ruff check src tests  # lint
 ```
@@ -203,7 +209,8 @@ ruff check src tests  # lint
 corvid/
 ├── src/corvid/
 │   ├── app/        bootstrap, config, paths, logging, job queue
-│   ├── domain/     entities & value objects (storage-agnostic)
+│   ├── domain/     entities & value objects (storage-agnostic), conversation
+│   │               threading (threads.py)
 │   ├── infra/      db (connection + migrations), repositories, credentials,
 │   │               mail/ (IMAP store, SMTP sender, NNTP client/store, POP3
 │   │               receiver behind ports), importers/ (dbx/mbox/maildir/eml),

@@ -193,6 +193,22 @@ cancellation.
   collection. The composer's `ContactCompleter` completes the recipient token
   being typed; the Address Book dialog doubles as a recipient picker.
 
+## Conversation threading
+
+Replies are grouped into conversations from their `In-Reply-To` / `References`
+headers (stored on `messages` since migration v7; IMAP now fetches them, and the
+POP3/import path parses them from raw bytes). The clustering lives in
+`domain/threads.py` (`build_threads`): a union-find links any two messages joined
+— directly or transitively — by a shared Message-ID, so a whole reply-chain lands
+in one `Thread` (ordered oldest-first; threads ordered newest-first). It is pure
+and header-only — subject is deliberately *not* used to merge, avoiding false
+grouping of unrelated same-subject mail. `MessageListPresenter.conversations`
+turns threads into `ConversationGroup` view-models, which `main_frame` renders
+into the native message `TreeCtrl` (see the Accessibility note). Grouping is a
+persisted toggle (`config.ui.group_by_conversation`); off, each message is its own
+single-item group (a flat list). Older mail that predates v7 threads once
+re-synced.
+
 ## Accessibility
 
 `ui/accessibility.py` is applied across the UI per WCAG 2.1.1 (Keyboard), 2.4.3

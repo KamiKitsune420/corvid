@@ -17,6 +17,11 @@
     "block_remote_content": true,
     "sanitize_html": true
   },
+  "ui": {
+    "minimize_to_tray": false,
+    "show_notifications": true,
+    "group_by_conversation": true
+  },
   "oauth": {
     "google_client_id": "",
     "google_client_secret": "",

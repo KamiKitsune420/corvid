@@ -57,6 +57,8 @@ def envelope_to_message(account_id: int, folder_id: int, env: HeaderEnvelope) ->
         uid=env.uid,
         message_id=env.message_id,
         subject=env.subject,
+        in_reply_to=env.in_reply_to,
+        references=env.references,
         from_name=env.from_name,
         from_addr=env.from_addr,
         to_addrs=env.to_addrs,

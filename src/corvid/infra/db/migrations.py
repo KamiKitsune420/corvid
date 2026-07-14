@@ -272,6 +272,21 @@ def _m0006_calendar(conn: sqlite3.Connection) -> None:
     )
 
 
+def _m0007_threading(conn: sqlite3.Connection) -> None:
+    """Store reply headers so messages can be grouped into conversations.
+
+    ``references`` is a SQL keyword, so the column is named ``reference_ids``.
+    Existing rows default to empty; they thread once re-synced (which now fetches
+    these headers)."""
+    _run(
+        conn,
+        (
+            "ALTER TABLE messages ADD COLUMN in_reply_to TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE messages ADD COLUMN reference_ids TEXT NOT NULL DEFAULT ''",
+        ),
+    )
+
+
 MIGRATIONS: tuple[Migration, ...] = (
     Migration(1, "initial schema", _m0001_initial),
     Migration(2, "full-text search index", _m0002_search),
@@ -279,6 +294,7 @@ MIGRATIONS: tuple[Migration, ...] = (
     Migration(4, "news account support", _m0004_news),
     Migration(5, "pop3 receive support", _m0005_pop3),
     Migration(6, "calendar events", _m0006_calendar),
+    Migration(7, "message threading headers", _m0007_threading),
 )
 
 

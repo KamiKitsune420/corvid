@@ -17,6 +17,8 @@ def _message_from_row(row: sqlite3.Row) -> Message:
         uid=row["uid"],
         message_id=row["message_id"],
         subject=row["subject"],
+        in_reply_to=row["in_reply_to"],
+        references=row["reference_ids"],
         from_name=row["from_name"],
         from_addr=row["from_addr"],
         to_addrs=row["to_addrs"],
@@ -70,10 +72,11 @@ class MessageRepository(Repository):
             """
             INSERT OR IGNORE INTO messages (
                 folder_id, account_id, uid, message_id, subject,
+                in_reply_to, reference_ids,
                 from_name, from_addr, to_addrs, cc_addrs, date_utc,
                 size, snippet, has_attachments,
                 flag_seen, flag_answered, flag_flagged, flag_draft, flag_deleted
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 message.folder_id,
@@ -81,6 +84,8 @@ class MessageRepository(Repository):
                 message.uid,
                 message.message_id,
                 message.subject,
+                message.in_reply_to,
+                message.references,
                 message.from_name,
                 message.from_addr,
                 message.to_addrs,

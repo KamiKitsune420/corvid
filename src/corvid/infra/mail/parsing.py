@@ -52,6 +52,8 @@ class RawHeaders:
 
     message_id: str = ""
     subject: str = ""
+    in_reply_to: str = ""
+    references: str = ""
     from_name: str = ""
     from_addr: str = ""
     to_addrs: str = ""
@@ -103,6 +105,8 @@ def header_fields_from_raw(raw: bytes) -> RawHeaders:
     return RawHeaders(
         message_id=str(msg.get("Message-ID", "")).strip(),
         subject=str(msg.get("Subject", "")),
+        in_reply_to=str(msg.get("In-Reply-To", "")).strip(),
+        references=" ".join(str(msg.get("References", "")).split()),
         from_name=from_name,
         from_addr=from_addr,
         to_addrs=_format_addr_list(str(msg.get("To", ""))),

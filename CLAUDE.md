@@ -34,10 +34,17 @@ rules learned the hard way (do not regress these):
   navigates to the `corvid:back` sentinel URL (vetoed in `_on_navigating`); a
   `postMessage` channel and a frame-level `EVT_CHAR_HOOK` are backups. See
   `main_frame._show_reading_only` / `_show_list_only` / `_right_keep`.
-- **Message list is a single column** whose text is a composed spoken line
-  ("Unread, sender, subject. sent today at 6:48AM."), so NVDA speaks one clean
-  sentence instead of three cells with column names. See `presenters.row_speech`
-  / `speak_date`.
+- **The message list is a native `wx.TreeCtrl`** (not a `ListCtrl`), so replies
+  can nest under a collapsible conversation node and NVDA announces the level and
+  expanded/collapsed state; **Left/Right collapse/expand** it natively. Each row
+  (leaf or conversation summary) is one composed spoken line ("Unread, sender,
+  subject. sent today at 6:48AM."), so NVDA speaks one clean sentence, not column
+  cells. Item data is a tuple: `("msg", id)` for a message, `("grp", ids, newest)`
+  for a conversation. Conversations start collapsed. See `presenters.row_speech` /
+  `group_speech` and `main_frame._populate_groups`. Grouping is header-based
+  (In-Reply-To/References → `domain/threads.py`), toggleable via **View → Group by
+  Conversation** (`config.ui.group_by_conversation`). Keep it a native tree — a
+  custom/owner-drawn tree would be invisible to NVDA.
 - Custom-drawn widgets (e.g. `wx.adv.CalendarCtrl`) are invisible to NVDA — the
   calendar uses a WebView ARIA grid (`ui/calendar_html.py`). Use
   `ui/accessibility.py` helpers (`accessible_name`, MSAA name overrides) for
@@ -61,7 +68,7 @@ real app under NVDA before claiming it works.
 Key patterns: SQLite WAL with **thread-affine connections** (each worker thread
 opens its own connection — never share a connection across threads; a common
 crash source). **Forward-only migrations** in `infra/db/migrations.py`
-(`MIGRATIONS` tuple, currently at **v6**; add the next version, never edit
+(`MIGRATIONS` tuple, currently at **v7**; add the next version, never edit
 applied ones). StrEnum everywhere; PEP 695 generics. FTS5 search with a LIKE
 fallback. Presenters are pure and unit-tested (no wx import).
 

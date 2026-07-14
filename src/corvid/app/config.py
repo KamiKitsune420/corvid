@@ -38,6 +38,7 @@ class SyncConfig:
 class UiConfig:
     minimize_to_tray: bool = False  # closing/Alt+F4 hides to the system tray
     show_notifications: bool = True  # Windows toast when new mail arrives
+    group_by_conversation: bool = True  # group replies into collapsible threads
 
 
 @dataclass(slots=True)
