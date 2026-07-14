@@ -4,6 +4,34 @@ Guidance for AI assistants (and humans) working in this repository. Read this
 first. For deeper design detail see `ARCHITECTURE.md`; for user-facing docs see
 `README.md`. This file is the working contract; those two are reference.
 
+## Session handoff (2026-07-14) — read this after the Windows restart
+
+All work below is **committed and pushed** to `github.com/KamiKitsune420/corvid`
+(public); a restart loses nothing. Current version **0.2.0**, DB migration **v7**.
+Last commit `5ab70d9`.
+
+Done this session:
+- Public GitHub repo created; installer now per-machine into
+  `Program Files\ALS-Software\corvid` (fixed the "ALS-Softwhere" typo). Per-user
+  data moved under `%APPDATA%\ALS-Software\Corvid` / `%LOCALAPPDATA%\...`.
+- Sibling **SBP** app (`C:\Users\adels\Documents\sbp`) got the same spelling fix
+  + one-time data migration; released as its own v1.6 (separate repo).
+- Added the GitHub-Releases **updater** (Help → Check for Updates / About).
+- Added **conversation grouping**: message list is now a native `wx.TreeCtrl`
+  with collapsible reply-threads (Left/Right expand/collapse). Header-based
+  (In-Reply-To/References), toggle in View → Group by Conversation.
+- Built + published the **v0.2.0 release** with `CorvidSetup-0.2.0.exe`; verified
+  the updater discovers it. Installer now **auto-downloads WebView2** if missing.
+
+Pending / next time:
+- **User (blind, NVDA) still needs to confirm** the conversation-grouping reads
+  well under NVDA, and test the WebView2 auto-download installer on a machine
+  without WebView2. Don't claim either works until confirmed.
+- Optional: one-time backfill so *existing* already-synced mail threads without a
+  full re-sync (parse reply headers from cached `.eml`).
+- Security: SBP's git remote has a plaintext PAT in `.git/config` — user
+  deferred rotating it.
+
 ## What Corvid is
 
 A modern, Outlook Express–inspired **desktop email & news client**. Python 3.12 +
