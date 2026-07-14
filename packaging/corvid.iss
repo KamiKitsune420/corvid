@@ -51,12 +51,30 @@ Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
+; If WebView2 was missing and we downloaded the bootstrapper (see [Code]),
+; install the runtime silently before finishing.
+Filename: "{tmp}\MicrosoftEdgeWebview2Setup.exe"; Parameters: "/silent /install"; \
+  StatusMsg: "Installing Microsoft Edge WebView2 Runtime..."; \
+  Check: NeedInstallWebView2; Flags: waituntilterminated
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
 
 [Code]
 { Corvid's message-reading pane uses the Microsoft Edge WebView2 runtime, which
-  is what makes email bodies readable by a screen reader. Windows 11 ships it,
-  but warn (non-fatally) if it's somehow missing so the user knows to install it. }
+  is what makes email bodies readable by a screen reader. Windows 11 ships it. If
+  it's missing, Setup downloads Microsoft's Evergreen Bootstrapper on the wizard's
+  download page and installs the runtime silently (see the [Run] entry), so the
+  user never has to fetch it by hand. }
+
+const
+  { Microsoft's stable "Evergreen Bootstrapper" link (a small ~2 MB downloader
+    that pulls the current runtime). }
+  WebView2BootstrapperUrl = 'https://go.microsoft.com/fwlink/p/?LinkId=2124703';
+  WebView2BootstrapperFile = 'MicrosoftEdgeWebview2Setup.exe';
+
+var
+  DownloadPage: TDownloadWizardPage;
+  WebView2Fetched: Boolean;  { True once the bootstrapper has been downloaded. }
+
 function WebView2Installed(): Boolean;
 var
   Pv: String;
@@ -67,13 +85,46 @@ begin
     RegQueryStringValue(HKCU, 'SOFTWARE\Microsoft\EdgeUpdate\Clients\{{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}', 'pv', Pv);
 end;
 
-function InitializeSetup(): Boolean;
+procedure InitializeWizard();
+begin
+  DownloadPage := CreateDownloadPage(
+    'Downloading a required component',
+    'Setup is fetching the Microsoft Edge WebView2 Runtime that Corvid needs to '
+      + 'display and read aloud email messages.',
+    nil);
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
 begin
   Result := True;
-  if not WebView2Installed() then
-    MsgBox('The Microsoft Edge WebView2 Runtime was not detected. Corvid needs it '
-      + 'to display (and read aloud) email messages. If message bodies appear blank, '
-      + 'install it free from:' + #13#10#13#10
-      + 'https://developer.microsoft.com/microsoft-edge/webview2/',
-      mbInformation, MB_OK);
+  WebView2Fetched := False;
+  { Only the Ready page triggers the download, and only when the runtime is
+    absent. On failure we don't block the install — Corvid still installs and the
+    user is told how to add WebView2 by hand. }
+  if (CurPageID = wpReady) and (not WebView2Installed()) then
+  begin
+    DownloadPage.Clear;
+    DownloadPage.Add(WebView2BootstrapperUrl, WebView2BootstrapperFile, '');
+    DownloadPage.Show;
+    try
+      try
+        DownloadPage.Download;
+        WebView2Fetched := True;
+      except
+        MsgBox('The Microsoft Edge WebView2 Runtime could not be downloaded ('
+          + GetExceptionMessage + ').' + #13#10#13#10
+          + 'Corvid will still install. If email messages appear blank, install '
+          + 'WebView2 for free from:' + #13#10
+          + 'https://developer.microsoft.com/microsoft-edge/webview2/',
+          mbInformation, MB_OK);
+      end;
+    finally
+      DownloadPage.Hide;
+    end;
+  end;
+end;
+
+function NeedInstallWebView2(): Boolean;
+begin
+  Result := WebView2Fetched;
 end;
