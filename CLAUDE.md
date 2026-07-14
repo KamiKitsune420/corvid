@@ -130,5 +130,12 @@ attachments) in `%LOCALAPPDATA%\ALS-Software\Corvid` — nested under the
   restricted-scope verification has no free path). `[Gmail]` and other Noselect
   IMAP folders are skipped in sync.
 - `_devdata/`, `build/`, `dist/`, caches are throwaway; don't commit them.
-- This repo currently has **no git** initialized (per environment). If migrated
-  into a git repo, commit/push only when asked.
+- **Auto-update:** Help → Check for Updates queries the GitHub Releases API for
+  `KamiKitsune420/corvid` (public repo). Layered as `domain/updates.py` (pure
+  version/asset rules) → `infra/updates.py` (`GitHubUpdateClient`, injectable
+  HTTP opener) → `service/updates.py` (`UpdateService`, repo constant
+  `GITHUB_REPO`, version from `corvid.__version__`) → `ui/update_dialog.py`. It
+  offers the `CorvidSetup-<ver>.exe` asset; a new release is published by tagging
+  and attaching that installer.
+- Git remote: `github.com/KamiKitsune420/corvid` (public). Commit/push only when
+  asked.

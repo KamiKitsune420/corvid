@@ -5,10 +5,12 @@ from __future__ import annotations
 import logging
 import threading
 from html import escape
+from pathlib import Path
 
 import wx
 import wx.adv
 
+from .. import __version__
 from ..app.bootstrap import AppContext
 from ..app.jobs import JobContext
 from ..domain.compose import DraftMessage
@@ -39,6 +41,7 @@ from ..service.messages import MessageBodyService
 from ..service.search import SearchService
 from ..service.send import MailboxSentRecorder, SendService
 from ..service.sync import SyncSummary
+from ..service.updates import build_update_service
 from .accessibility import accessible_name
 from .account_dialog import AccountDialog
 from .assets import app_icon
@@ -58,6 +61,7 @@ from .presenters import (
 from .preview_panel import PreviewPanel
 from .rules_dialog import RulesDialog
 from .settings_dialog import SettingsDialog
+from .update_dialog import UpdateDialog
 from .viewmodels import MessageRow
 
 log = logging.getLogger("corvid.ui")
@@ -79,6 +83,7 @@ ID_NEWSGROUPS = wx.NewIdRef()
 ID_VIEW_MAIL = wx.NewIdRef()
 ID_VIEW_CALENDAR = wx.NewIdRef()
 ID_TOGGLE_VIEW = wx.NewIdRef()
+ID_CHECK_UPDATES = wx.NewIdRef()
 
 _EMPTY_BODY = ParsedMessage(text="(No content.)")
 
@@ -192,6 +197,11 @@ class MainFrame(wx.Frame):
         tools_menu.Append(ID_SETTINGS, "&Settings...\tCtrl+,")
         menubar.Append(tools_menu, "&Tools")
 
+        help_menu = wx.Menu()
+        help_menu.Append(ID_CHECK_UPDATES, "Check for &Updates...")
+        help_menu.Append(wx.ID_ABOUT, "&About Corvid")
+        menubar.Append(help_menu, "&Help")
+
         self.SetMenuBar(menubar)
         self.Bind(wx.EVT_MENU, lambda _e: self._show_view(0), id=ID_VIEW_MAIL)
         self.Bind(wx.EVT_MENU, lambda _e: self._show_view(1), id=ID_VIEW_CALENDAR)
@@ -214,6 +224,8 @@ class MainFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, self.on_mark_unread, id=ID_MARK_UNREAD)
         self.Bind(wx.EVT_MENU, self.on_toggle_flag, id=ID_FLAG)
         self.Bind(wx.EVT_MENU, self.on_delete_message, id=ID_DELETE)
+        self.Bind(wx.EVT_MENU, self.on_check_updates, id=ID_CHECK_UPDATES)
+        self.Bind(wx.EVT_MENU, self.on_about, id=wx.ID_ABOUT)
         self.Bind(wx.EVT_MENU, lambda _e: self.quit_app(), id=wx.ID_EXIT)
 
     def _build_toolbar(self) -> None:
@@ -1044,6 +1056,25 @@ class MainFrame(wx.Frame):
             self._apply_tray_setting()
             self._restart_sync_timer()
             self._preview.set_block_remote(self.ctx.config.security.block_remote_content)
+
+    def on_check_updates(self, _event: wx.CommandEvent) -> None:
+        # Save the installer to the user's Downloads folder (created if absent).
+        dialog = UpdateDialog(
+            self, build_update_service(), Path.home() / "Downloads"
+        )
+        try:
+            dialog.ShowModal()
+        finally:
+            dialog.Destroy()
+
+    def on_about(self, _event: wx.CommandEvent) -> None:
+        wx.MessageBox(
+            f"Corvid {__version__}\n\n"
+            "A modern, Outlook Express-inspired email & news client.",
+            "About Corvid",
+            wx.OK | wx.ICON_INFORMATION,
+            self,
+        )
 
     def on_new_message(self, _event: wx.CommandEvent) -> None:
         account = self._current_account()

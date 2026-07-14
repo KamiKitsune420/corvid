@@ -203,6 +203,37 @@ named control in one call. Primary actions carry mnemonics and accelerators;
 meaning is never color-only (unread is bold); native theming preserves OS
 high-contrast and font scaling.
 
+## Software updates
+
+The updater is a textbook slice through all four layers (`ui → service → domain
+← infra`), so it doubles as a worked example of the dependency rule:
+
+- **`domain/updates.py`** — pure rules, no I/O: `parse_version` (tolerant of a
+  leading `v` and of junk, which sorts as oldest so a bad tag never looks
+  newer), `is_newer`, `select_asset` (prefer the setup `.exe`, fall back to a
+  `.zip`), and `evaluate_update`, which combines them into an `UpdateInfo | None`
+  decision. Fully unit-tested without a network or wx.
+- **`infra/updates.py`** — `GitHubUpdateClient` is the network/JSON boundary:
+  `fetch_latest_release()` parses the Releases API into a domain `Release`,
+  `download()` streams an asset to disk with a progress callback. Failures are
+  wrapped as `NetworkError` with a `user_message`. The HTTP **opener is
+  injectable**, so tests drive it with a fake response — no sockets.
+- **`service/updates.py`** — `UpdateService` orchestrates: check returns
+  `UpdateInfo | None` and *raises* `NetworkError` if the check itself failed, so
+  the UI can tell "up to date" (`None`) from "couldn't check" (exception).
+  `build_update_service()` wires the client for the `KamiKitsune420/corvid`
+  repo, defaulting the running version from `corvid.__version__` and always
+  preferring the installer asset (an installed build sits in read-only Program
+  Files and can only upgrade by re-running setup).
+- **`ui/update_dialog.py`** — a modal that runs the check/download on daemon
+  threads and marshals results back with `wx.CallAfter`. Status is a
+  **read-only multiline `TextCtrl`** (so NVDA reads each state change in browse
+  mode), every control has an `accessible_name`, and Escape closes it. Wired to
+  **Help → Check for Updates**; **Help → About Corvid** shows the version.
+
+Nothing installs automatically: the user clicks Download, and the finished
+installer is revealed in Explorer for them to run.
+
 ## Diagnostics & packaging
 
 `app/crash.py` installs an `excepthook` that writes a timestamped `crash-*.log`

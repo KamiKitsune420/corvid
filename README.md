@@ -162,14 +162,37 @@ By default, files live in per-user locations:
 
 | Platform | Config | Data / logs / attachments |
 | --- | --- | --- |
-| Windows | `%APPDATA%\Corvid` | `%LOCALAPPDATA%\Corvid` |
+| Windows | `%APPDATA%\ALS-Software\Corvid` | `%LOCALAPPDATA%\ALS-Software\Corvid` |
 | macOS | `~/Library/Application Support/Corvid` | same |
 | Linux | `$XDG_CONFIG_HOME/corvid` | `$XDG_DATA_HOME/corvid` |
+
+On Windows the data nests under the `ALS-Software` publisher folder, matching the
+installer's `Program Files\ALS-Software\corvid` layout.
+
+## Updating Corvid
+
+Corvid checks for new versions through **GitHub Releases**. Open **Help → Check
+for Updates** (or see the current version under **Help → About Corvid**). The
+dialog compares your running version against the latest published release of
+[`KamiKitsune420/corvid`](https://github.com/KamiKitsune420/corvid):
+
+- **Up to date** — it says so and does nothing further.
+- **A newer version exists** — it shows the version and its release notes, and a
+  **Download Update** button fetches the installer (`CorvidSetup-<version>.exe`)
+  to your `Downloads` folder with a progress bar, then reveals it in Explorer.
+- **Couldn't check** (offline, etc.) — it reports that; nothing is changed.
+
+To finish updating, close Corvid and run the downloaded installer. It reinstalls
+in place over `Program Files\ALS-Software\corvid`; your accounts, mail, and
+settings (in `%APPDATA%`/`%LOCALAPPDATA%`) are untouched. The check and download
+run on background threads, so the UI stays responsive, and the status area is a
+screen-reader-readable text field that announces each step. Nothing is
+downloaded or installed without your explicit action.
 
 ## Test
 
 ```bash
-pytest                # 144 tests, pure stdlib
+pytest                # 178 tests, pure stdlib
 mypy src              # strict type checking (the wx UI layer is excluded — see pyproject)
 ruff check src tests  # lint
 ```
@@ -186,7 +209,8 @@ corvid/
 │   │               receiver behind ports), importers/ (dbx/mbox/maildir/eml),
 │   │               contact_importers/ (vcard/csv/.contact/ldif/wab)
 │   ├── service/    use-cases: accounts, sync, send, search, rules, contacts,
-│   │               news, pop3, import, contact_import, delivery (shared store)
+│   │               news, pop3, import, contact_import, delivery (shared store),
+│   │               updates (GitHub Releases check/download)
 │   ├── ui/         wxPython 3-pane shell, dialogs, wx-free presenters,
 │   │               accessibility helpers
 │   ├── cli.py      operational command-line entry point
