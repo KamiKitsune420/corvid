@@ -6,11 +6,11 @@
 ;     "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" packaging\corvid.iss
 ;
 ; The installer is written to dist\CorvidSetup-<version>.exe. It installs
-; per-user (no administrator prompt) into %LOCALAPPDATA%\Programs\Corvid.
+; per-machine (requires elevation) into Program Files\ALS-Softwhere\corvid.
 
 #define MyAppName "Corvid"
 #define MyAppVersion "0.1.0"          ; keep in sync with pyproject.toml
-#define MyAppPublisher "Corvid contributors"
+#define MyAppPublisher "ALS-Softwhere"
 #define MyAppExeName "Corvid.exe"
 
 [Setup]
@@ -19,13 +19,12 @@ AppId={{B7B2F3B8-3E1C-4C7A-9D2E-6A1F0C5D9E42}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-DefaultDirName={autopf}\{#MyAppName}
+DefaultDirName={autopf}\{#MyAppPublisher}\corvid
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 LicenseFile=..\LICENSE
-; Per-user install so no UAC / admin rights are required.
-PrivilegesRequired=lowest
-PrivilegesRequiredOverridesAllowed=dialog
+; Per-machine install into Program Files\ALS-Softwhere\corvid; requires elevation.
+PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=..\dist

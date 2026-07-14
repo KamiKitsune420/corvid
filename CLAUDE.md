@@ -105,7 +105,8 @@ args, `wx.Window` attribute access, tuple-vs-`wx.Size`) are expected noise —
 - `packaging/corvid_gui.py` — frozen-app entry point (calls `ui.app.run()`).
 - `corvid.spec` — PyInstaller one-folder build; bundles assets,
   `config.example.json`, and `WebView2Loader.dll`.
-- `packaging/corvid.iss` — Inno Setup installer: **per-user** install (no admin),
+- `packaging/corvid.iss` — Inno Setup installer: **per-machine** install into
+  `Program Files\ALS-Softwhere\corvid` (requires admin/elevation),
   Start Menu + optional Desktop shortcut, WebView2-runtime presence check.
 - App icon: `src/corvid/ui/assets/corvid.ico` (multi-res) + `corvid_*.png`.
 - **Bump the version in BOTH `pyproject.toml` and the `MyAppVersion` define in
