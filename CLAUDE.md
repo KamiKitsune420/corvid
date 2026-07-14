@@ -109,8 +109,9 @@ args, `wx.Window` attribute access, tuple-vs-`wx.Size`) are expected noise —
   `Program Files\ALS-Software\corvid` (requires admin/elevation),
   Start Menu + optional Desktop shortcut, WebView2-runtime presence check.
 - App icon: `src/corvid/ui/assets/corvid.ico` (multi-res) + `corvid_*.png`.
-- **Bump the version in BOTH `pyproject.toml` and the `MyAppVersion` define in
-  `packaging/corvid.iss`** for a release.
+- **Bump the version in all three places for a release:** `pyproject.toml`,
+  `__version__` in `src/corvid/__init__.py`, and the `MyAppVersion` define in
+  `packaging/corvid.iss`.
 
 ## Data locations
 

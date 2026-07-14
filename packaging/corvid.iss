@@ -9,7 +9,7 @@
 ; per-machine (requires elevation) into Program Files\ALS-Software\corvid.
 
 #define MyAppName "Corvid"
-#define MyAppVersion "0.1.0"          ; keep in sync with pyproject.toml
+#define MyAppVersion "0.2.0"          ; keep in sync with pyproject.toml
 #define MyAppPublisher "ALS-Software"
 #define MyAppExeName "Corvid.exe"
 
