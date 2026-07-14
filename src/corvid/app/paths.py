@@ -12,6 +12,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 APP_NAME = "Corvid"
+# Publisher folder, matching the installer's Program Files\ALS-Software\corvid
+# layout. Installed builds live under read-only Program Files, so per-user data
+# goes to %APPDATA%\ALS-Software\Corvid (and %LOCALAPPDATA%\...) instead.
+APP_VENDOR = "ALS-Software"
 
 
 def _windows_dirs() -> tuple[Path, Path]:
@@ -19,7 +23,7 @@ def _windows_dirs() -> tuple[Path, Path]:
     local = os.environ.get("LOCALAPPDATA")
     base_cfg = Path(roaming) if roaming else Path.home() / "AppData" / "Roaming"
     base_data = Path(local) if local else Path.home() / "AppData" / "Local"
-    return base_cfg / APP_NAME, base_data / APP_NAME
+    return base_cfg / APP_VENDOR / APP_NAME, base_data / APP_VENDOR / APP_NAME
 
 
 def _macos_dirs() -> tuple[Path, Path]:

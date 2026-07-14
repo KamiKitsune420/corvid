@@ -2,7 +2,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from corvid.app.paths import default_paths, paths_for_root
+import pytest
+
+from corvid.app.paths import _windows_dirs, default_paths, paths_for_root
+
+
+def test_windows_dirs_nest_under_vendor_folder(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("APPDATA", r"C:\Users\x\AppData\Roaming")
+    monkeypatch.setenv("LOCALAPPDATA", r"C:\Users\x\AppData\Local")
+    cfg, data = _windows_dirs()
+    assert cfg.as_posix().endswith("Roaming/ALS-Software/Corvid")
+    assert data.as_posix().endswith("Local/ALS-Software/Corvid")
 
 
 def test_paths_for_root_layout(tmp_path: Path) -> None:

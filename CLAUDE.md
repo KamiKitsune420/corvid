@@ -106,7 +106,7 @@ args, `wx.Window` attribute access, tuple-vs-`wx.Size`) are expected noise —
 - `corvid.spec` — PyInstaller one-folder build; bundles assets,
   `config.example.json`, and `WebView2Loader.dll`.
 - `packaging/corvid.iss` — Inno Setup installer: **per-machine** install into
-  `Program Files\ALS-Softwhere\corvid` (requires admin/elevation),
+  `Program Files\ALS-Software\corvid` (requires admin/elevation),
   Start Menu + optional Desktop shortcut, WebView2-runtime presence check.
 - App icon: `src/corvid/ui/assets/corvid.ico` (multi-res) + `corvid_*.png`.
 - **Bump the version in BOTH `pyproject.toml` and the `MyAppVersion` define in
@@ -115,8 +115,10 @@ args, `wx.Window` attribute access, tuple-vs-`wx.Size`) are expected noise —
 ## Data locations
 
 Per-user, resolved in `app/paths.py`. On Windows: config in
-`%APPDATA%\Corvid`, data (SQLite `corvid.sqlite3`, logs, attachments) in
-`%LOCALAPPDATA%\Corvid`. `--dev` puts everything under `./_devdata`.
+`%APPDATA%\ALS-Software\Corvid`, data (SQLite `corvid.sqlite3`, logs,
+attachments) in `%LOCALAPPDATA%\ALS-Software\Corvid` — nested under the
+`ALS-Software` publisher folder, matching the installer's Program Files layout.
+`--dev` puts everything under `./_devdata`.
 
 ## Gotchas / house style
 
