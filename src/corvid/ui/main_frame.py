@@ -141,6 +141,7 @@ class MainFrame(wx.Frame):
         )
 
         self._quitting = False
+        self._closing = False  # True once teardown starts, so late tree events bail
         self._notify_new = False
         self._round_new = 0
         self._synced_once = False  # suppress the toast for the first (backfill) sync
@@ -641,6 +642,8 @@ class MainFrame(wx.Frame):
     def on_message_selected(self, _event: wx.TreeEvent) -> None:
         # Just navigation — the screen reader reads the row; the reading pane
         # stays closed until the message is opened with Enter/double-click.
+        if self._closing:
+            return  # teardown fires a selection change after the panes are gone
         self._hide_preview()
 
     def on_message_opened(self, event: wx.TreeEvent) -> None:
@@ -1582,6 +1585,10 @@ class MainFrame(wx.Frame):
             self.SetStatusText("")
             return
         self._sync_timer.Stop()
+        # Destroying the frame clears the message tree's selection, which fires
+        # EVT_TREE_SEL_CHANGED after the splitters are gone — flag it so the
+        # handler bails instead of touching deleted C++ objects.
+        self._closing = True
         if self._tray is not None:
             self._tray.RemoveIcon()
             self._tray.Destroy()
